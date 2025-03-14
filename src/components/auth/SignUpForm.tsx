@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../../supabase/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,19 +6,49 @@ import { Label } from "@/components/ui/label";
 import { useNavigate, Link } from "react-router-dom";
 import AuthLayout from "./AuthLayout";
 import { useToast } from "@/components/ui/use-toast";
+import OfflineSignUpForm from "./OfflineSignUpForm";
 
 export default function SignUpForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [showOfflineMode, setShowOfflineMode] = useState(false);
   const { signUp } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Check for connection issues on component mount
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        // Try to fetch from Supabase URL to check connection
+        const supabaseUrl =
+          import.meta.env.VITE_SUPABASE_URL ||
+          "https://vnixswtxvuqtytneqgos.supabase.co";
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+        await fetch(`${supabaseUrl}/auth/v1/health`, {
+          method: "GET",
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+      } catch (error) {
+        console.error("Connection check failed:", error);
+        setShowOfflineMode(true);
+      }
+    };
+
+    checkConnection();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setIsLoading(true);
       await signUp(email, password, fullName);
       toast({
         title: "Account created successfully",
@@ -27,9 +57,28 @@ export default function SignUpForm() {
       });
       navigate("/login");
     } catch (error) {
-      setError("Error creating account");
+      console.error("Error during sign up:", error);
+
+      // Check if it's a connection error
+      if (
+        error instanceof Error &&
+        (error.message.includes("fetch") ||
+          error.message.includes("network") ||
+          error.message.includes("timeout") ||
+          error.message.includes("abort"))
+      ) {
+        setShowOfflineMode(true);
+      } else {
+        setError("Error creating account");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  if (showOfflineMode) {
+    return <OfflineSignUpForm />;
+  }
 
   return (
     <AuthLayout>
@@ -93,8 +142,9 @@ export default function SignUpForm() {
           <Button
             type="submit"
             className="w-full h-12 rounded-full bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium shadow-md"
+            disabled={isLoading}
           >
-            Create account
+            {isLoading ? "Creating account..." : "Create account"}
           </Button>
 
           <div className="text-xs text-center text-gray-500 mt-6">
@@ -116,6 +166,16 @@ export default function SignUpForm() {
             >
               Sign in
             </Link>
+          </div>
+
+          <div className="text-center">
+            <Button
+              variant="link"
+              className="text-xs text-muted-foreground"
+              onClick={() => setShowOfflineMode(true)}
+            >
+              Use offline mode
+            </Button>
           </div>
         </form>
       </div>
