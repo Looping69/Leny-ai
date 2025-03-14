@@ -23,7 +23,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const checkSession = async () => {
       try {
         setLoading(true);
+
+        // Add timeout to the session request
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
         const { data, error } = await supabase.auth.getSession();
+        clearTimeout(timeoutId);
 
         if (error) {
           console.error("Error getting session:", error);
@@ -57,7 +63,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
 
-      const { error } = await supabase.auth.signUp({
+      // Add timeout to the auth request
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(
+          () => reject(new Error("Authentication request timed out")),
+          10000,
+        );
+      });
+
+      const authPromise = supabase.auth.signUp({
         email,
         password,
         options: {
@@ -66,6 +80,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
         },
       });
+
+      // Race between the auth request and the timeout
+      const { error } = (await Promise.race([
+        authPromise,
+        timeoutPromise,
+      ])) as any;
 
       if (error) {
         setError(error);
@@ -124,7 +144,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
 
-      const { error } = await supabase.auth.signOut();
+      // Check if we're in offline mode
+      const offlineUser = localStorage.getItem("offlineUser");
+      if (offlineUser) {
+        localStorage.removeItem("offlineUser");
+        setUser(null);
+        return;
+      }
+
+      // Add timeout to the auth request
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Sign out request timed out")), 5000);
+      });
+
+      const authPromise = supabase.auth.signOut();
+
+      // Race between the auth request and the timeout
+      const { error } = (await Promise.race([
+        authPromise,
+        timeoutPromise,
+      ])) as any;
 
       if (error) {
         setError(error);

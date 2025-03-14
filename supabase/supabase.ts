@@ -16,16 +16,43 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// Custom fetch with timeout
+const fetchWithTimeout = (
+  url: RequestInfo | URL,
+  options: RequestInit = {},
+  timeout = 10000,
+) => {
+  return new Promise((resolve, reject) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+      .then((response) => {
+        clearTimeout(timeoutId);
+        resolve(response);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+};
+
 // Create the Supabase client with proper typing and additional options
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
+    detectSessionInUrl: true,
+    flowType: "pkce",
   },
   global: {
     fetch: (...args) => {
-      // Add custom fetch options if needed
-      return fetch(...args);
+      // Use our custom fetch with timeout
+      return fetchWithTimeout(args[0], args[1], 10000) as Promise<Response>;
     },
   },
   // Add retryable fetch options
@@ -34,3 +61,22 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     retryInterval: 1000, // 1 second between retries
   },
 });
+
+// Add a health check function to test connectivity
+export const checkSupabaseConnection = async (): Promise<boolean> => {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(`${supabaseUrl}/auth/v1/health`, {
+      method: "GET",
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    return response.ok;
+  } catch (error) {
+    console.error("Supabase connection check failed:", error);
+    return false;
+  }
+};
