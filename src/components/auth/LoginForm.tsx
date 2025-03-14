@@ -1,83 +1,18 @@
-import { useState, useEffect } from "react";
-import { useAuth } from "../../../supabase/auth";
+import { useState } from "react";
+import { useAuth, checkSupabaseConnection } from "../../../supabase/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate, Link } from "react-router-dom";
 import AuthLayout from "./AuthLayout";
-import OfflineLoginForm from "./OfflineLoginForm";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [showOfflineMode, setShowOfflineMode] = useState(false);
   const { signIn } = useAuth();
   const navigate = useNavigate();
-
-  // Check for connection issues on component mount
-  useEffect(() => {
-    const checkConnection = async () => {
-      try {
-        // Import the connection check function from supabase.ts
-        const { checkSupabaseConnection } = await import(
-          "../../../supabase/supabase"
-        );
-
-        // Try multiple times with increasing timeouts
-        let isConnected = false;
-
-        // First quick check
-        try {
-          isConnected = await checkSupabaseConnection();
-        } catch (quickCheckError) {
-          console.warn("Quick connection check failed:", quickCheckError);
-        }
-
-        // If quick check failed, try again with longer timeout
-        if (!isConnected) {
-          try {
-            // Try to fetch from Supabase URL to check connection with longer timeout
-            const supabaseUrl =
-              import.meta.env.VITE_SUPABASE_URL ||
-              "https://vnixswtxvuqtytneqgos.supabase.co";
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
-
-            const response = await fetch(`${supabaseUrl}/auth/v1/health`, {
-              method: "GET",
-              signal: controller.signal,
-              // Add cache control to prevent caching issues
-              headers: {
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                Pragma: "no-cache",
-                Expires: "0",
-              },
-            });
-
-            clearTimeout(timeoutId);
-            isConnected = response.ok;
-          } catch (fetchError) {
-            console.error("Extended connection check failed:", fetchError);
-            isConnected = false;
-          }
-        }
-
-        if (!isConnected) {
-          console.log(
-            "All connection attempts failed, switching to offline mode",
-          );
-          setShowOfflineMode(true);
-        }
-      } catch (error) {
-        console.error("Connection check process failed:", error);
-        setShowOfflineMode(true);
-      }
-    };
-
-    checkConnection();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,56 +21,27 @@ export default function LoginForm() {
 
       // Check connection before attempting to sign in
       try {
-        const { checkSupabaseConnection } = await import(
-          "../../../supabase/supabase"
-        );
         const isConnected = await checkSupabaseConnection();
-
         if (!isConnected) {
-          console.log(
-            "Connection check failed before sign in, switching to offline mode",
-          );
-          setShowOfflineMode(true);
+          console.log("Connection check failed before sign in");
+          setError("Connection error. Please try again later.");
           return;
         }
       } catch (connError) {
         console.error("Connection check error before sign in:", connError);
-        setShowOfflineMode(true);
+        setError("Connection error. Please try again later.");
         return;
       }
 
-      // Proceed with sign in if connection is available
       await signIn(email, password);
-      navigate("/dashboard"); // Navigate to dashboard instead of root
+      navigate("/dashboard");
     } catch (error) {
       console.error("Error during sign in:", error);
-
-      // Check if it's a connection error
-      if (
-        error instanceof Error &&
-        (error.message.includes("fetch") ||
-          error.message.includes("network") ||
-          error.message.includes("timeout") ||
-          error.message.includes("abort") ||
-          error.message.includes("Failed to fetch") ||
-          error.message.includes("NetworkError") ||
-          error.message.includes("ERR_NAME_NOT_RESOLVED"))
-      ) {
-        console.log(
-          "Connection error detected during sign in, switching to offline mode",
-        );
-        setShowOfflineMode(true);
-      } else {
-        setError("Invalid email or password");
-      }
+      setError("Invalid email or password");
     } finally {
       setIsLoading(false);
     }
   };
-
-  if (showOfflineMode) {
-    return <OfflineLoginForm />;
-  }
 
   return (
     <AuthLayout>
@@ -200,16 +106,6 @@ export default function LoginForm() {
             >
               Sign up
             </Link>
-          </div>
-
-          <div className="text-center">
-            <Button
-              variant="link"
-              className="text-xs text-muted-foreground"
-              onClick={() => setShowOfflineMode(true)}
-            >
-              Use offline mode
-            </Button>
           </div>
         </form>
       </div>

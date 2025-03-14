@@ -2,6 +2,18 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { User, AuthError } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
+export function checkSupabaseConnection(): Promise<boolean> {
+  return new Promise(async (resolve) => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      resolve(true);
+    } catch (error) {
+      console.error("Supabase connection check failed:", error);
+      resolve(false);
+    }
+  });
+}
+
 type AuthContextType = {
   user: User | null;
   loading: boolean;
@@ -24,14 +36,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setLoading(true);
 
-        // First check if we're in offline mode
-        const offlineUser = localStorage.getItem("offlineUser");
-        if (offlineUser) {
-          console.log("Found offline user in localStorage, using offline mode");
-          setLoading(false);
-          return;
-        }
-
         // Check connection before attempting to get session
         let isConnected = false;
         try {
@@ -46,12 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // Add timeout to the session request
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
-
         const { data, error } = await supabase.auth.getSession();
-        clearTimeout(timeoutId);
 
         if (error) {
           console.error("Error getting session:", error);
@@ -85,15 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
 
-      // Add timeout to the auth request
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(
-          () => reject(new Error("Authentication request timed out")),
-          10000,
-        );
-      });
-
-      const authPromise = supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -102,12 +93,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
         },
       });
-
-      // Race between the auth request and the timeout
-      const { error } = (await Promise.race([
-        authPromise,
-        timeoutPromise,
-      ])) as any;
 
       if (error) {
         setError(error);
@@ -128,24 +113,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
 
-      // Add timeout to the auth request
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(
-          () => reject(new Error("Authentication request timed out")),
-          10000,
-        );
-      });
-
-      const authPromise = supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-
-      // Race between the auth request and the timeout
-      const { error } = (await Promise.race([
-        authPromise,
-        timeoutPromise,
-      ])) as any;
 
       if (error) {
         setError(error);
@@ -166,26 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
 
-      // Check if we're in offline mode
-      const offlineUser = localStorage.getItem("offlineUser");
-      if (offlineUser) {
-        localStorage.removeItem("offlineUser");
-        setUser(null);
-        return;
-      }
-
-      // Add timeout to the auth request
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Sign out request timed out")), 5000);
-      });
-
-      const authPromise = supabase.auth.signOut();
-
-      // Race between the auth request and the timeout
-      const { error } = (await Promise.race([
-        authPromise,
-        timeoutPromise,
-      ])) as any;
+      const { error } = await supabase.auth.signOut();
 
       if (error) {
         setError(error);

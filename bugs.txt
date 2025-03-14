@@ -9,8 +9,7 @@
 
 ## Authentication Issues
 - [FIXED] Failed to load resource: the server responded with a status of 400 () - Fixed by improving error handling in auth.tsx and updating Supabase client configuration
-- [FIXED] Connection issues during login/signup - Fixed by implementing more robust connection checking and offline mode activation
-- [FIXED] ERR_NAME_NOT_RESOLVED when connecting to Supabase - Fixed by adding retry logic, better error handling, and improved offline mode detection
+- [FIXED] ReferenceError: checkSupabaseConnection is not defined - Fixed by adding the function to auth.tsx and properly importing it
 
 ## Database Issues
 - [FIXED] Failed to load resource: the server responded with a status of 500 () - Fixed by modifying user profile fetch in DashboardLayout.tsx
@@ -19,4 +18,6 @@
 ## React Component Issues
 - [ACTIVE] Warning: Function components cannot be given refs - Issue with DropdownMenu component
 
+## Deployment Issues
+- [FIXED] ERR_NAME_NOT_RESOLVED when connecting to Supabase - Fixed by adding connection checking and better error handling
 
