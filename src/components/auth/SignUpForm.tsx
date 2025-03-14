@@ -23,21 +23,58 @@ export default function SignUpForm() {
   useEffect(() => {
     const checkConnection = async () => {
       try {
-        // Try to fetch from Supabase URL to check connection
-        const supabaseUrl =
-          import.meta.env.VITE_SUPABASE_URL ||
-          "https://vnixswtxvuqtytneqgos.supabase.co";
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        // Import the connection check function from supabase.ts
+        const { checkSupabaseConnection } = await import(
+          "../../../supabase/supabase"
+        );
 
-        await fetch(`${supabaseUrl}/auth/v1/health`, {
-          method: "GET",
-          signal: controller.signal,
-        });
+        // Try multiple times with increasing timeouts
+        let isConnected = false;
 
-        clearTimeout(timeoutId);
+        // First quick check
+        try {
+          isConnected = await checkSupabaseConnection();
+        } catch (quickCheckError) {
+          console.warn("Quick connection check failed:", quickCheckError);
+        }
+
+        // If quick check failed, try again with longer timeout
+        if (!isConnected) {
+          try {
+            // Try to fetch from Supabase URL to check connection with longer timeout
+            const supabaseUrl =
+              import.meta.env.VITE_SUPABASE_URL ||
+              "https://vnixswtxvuqtytneqgos.supabase.co";
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
+            const response = await fetch(`${supabaseUrl}/auth/v1/health`, {
+              method: "GET",
+              signal: controller.signal,
+              // Add cache control to prevent caching issues
+              headers: {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Pragma: "no-cache",
+                Expires: "0",
+              },
+            });
+
+            clearTimeout(timeoutId);
+            isConnected = response.ok;
+          } catch (fetchError) {
+            console.error("Extended connection check failed:", fetchError);
+            isConnected = false;
+          }
+        }
+
+        if (!isConnected) {
+          console.log(
+            "All connection attempts failed, switching to offline mode",
+          );
+          setShowOfflineMode(true);
+        }
       } catch (error) {
-        console.error("Connection check failed:", error);
+        console.error("Connection check process failed:", error);
         setShowOfflineMode(true);
       }
     };
@@ -49,6 +86,28 @@ export default function SignUpForm() {
     e.preventDefault();
     try {
       setIsLoading(true);
+
+      // Check connection before attempting to sign up
+      try {
+        const { checkSupabaseConnection } = await import(
+          "../../../supabase/supabase"
+        );
+        const isConnected = await checkSupabaseConnection();
+
+        if (!isConnected) {
+          console.log(
+            "Connection check failed before sign up, switching to offline mode",
+          );
+          setShowOfflineMode(true);
+          return;
+        }
+      } catch (connError) {
+        console.error("Connection check error before sign up:", connError);
+        setShowOfflineMode(true);
+        return;
+      }
+
+      // Proceed with sign up if connection is available
       await signUp(email, password, fullName);
       toast({
         title: "Account created successfully",
@@ -65,8 +124,14 @@ export default function SignUpForm() {
         (error.message.includes("fetch") ||
           error.message.includes("network") ||
           error.message.includes("timeout") ||
-          error.message.includes("abort"))
+          error.message.includes("abort") ||
+          error.message.includes("Failed to fetch") ||
+          error.message.includes("NetworkError") ||
+          error.message.includes("ERR_NAME_NOT_RESOLVED"))
       ) {
+        console.log(
+          "Connection error detected during sign up, switching to offline mode",
+        );
         setShowOfflineMode(true);
       } else {
         setError("Error creating account");

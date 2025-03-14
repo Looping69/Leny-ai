@@ -24,9 +24,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setLoading(true);
 
+        // First check if we're in offline mode
+        const offlineUser = localStorage.getItem("offlineUser");
+        if (offlineUser) {
+          console.log("Found offline user in localStorage, using offline mode");
+          setLoading(false);
+          return;
+        }
+
+        // Check connection before attempting to get session
+        let isConnected = false;
+        try {
+          isConnected = await checkSupabaseConnection();
+        } catch (connError) {
+          console.error("Connection check error in auth provider:", connError);
+        }
+
+        if (!isConnected) {
+          console.log("Connection check failed in auth provider");
+          setLoading(false);
+          return;
+        }
+
         // Add timeout to the session request
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
         const { data, error } = await supabase.auth.getSession();
         clearTimeout(timeoutId);

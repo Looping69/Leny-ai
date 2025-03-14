@@ -16,28 +16,55 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Custom fetch with timeout
+// Custom fetch with timeout and retry logic
 const fetchWithTimeout = (
   url: RequestInfo | URL,
   options: RequestInit = {},
   timeout = 10000,
+  retries = 2,
 ) => {
   return new Promise((resolve, reject) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const attemptFetch = (attemptsLeft: number) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.log(`Fetch timeout after ${timeout}ms`);
+      }, timeout);
 
-    fetch(url, {
-      ...options,
-      signal: controller.signal,
-    })
-      .then((response) => {
-        clearTimeout(timeoutId);
-        resolve(response);
+      fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          ...options.headers,
+          // Add cache control to prevent caching issues
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
       })
-      .catch((error) => {
-        clearTimeout(timeoutId);
-        reject(error);
-      });
+        .then((response) => {
+          clearTimeout(timeoutId);
+          resolve(response);
+        })
+        .catch((error) => {
+          clearTimeout(timeoutId);
+          if (attemptsLeft > 0) {
+            console.log(
+              `Fetch attempt failed, retrying... (${attemptsLeft} attempts left)`,
+            );
+            // Exponential backoff: wait longer between retries
+            setTimeout(
+              () => attemptFetch(attemptsLeft - 1),
+              (retries - attemptsLeft + 1) * 1000,
+            );
+          } else {
+            console.error("All fetch attempts failed:", error);
+            reject(error);
+          }
+        });
+    };
+
+    attemptFetch(retries);
   });
 };
 
@@ -48,11 +75,18 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     flowType: "pkce",
+    storageKey: "aida-auth-token", // Use a custom storage key to avoid conflicts
   },
   global: {
     fetch: (...args) => {
-      // Use our custom fetch with timeout
-      return fetchWithTimeout(args[0], args[1], 10000) as Promise<Response>;
+      // Use our custom fetch with timeout and retries
+      return fetchWithTimeout(args[0], args[1], 10000, 2) as Promise<Response>;
+    },
+    headers: {
+      // Add cache control to prevent caching issues
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
     },
   },
   // Add retryable fetch options
@@ -71,6 +105,12 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
     const response = await fetch(`${supabaseUrl}/auth/v1/health`, {
       method: "GET",
       signal: controller.signal,
+      // Add cache control to prevent caching issues
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
     });
 
     clearTimeout(timeoutId);
