@@ -1,4 +1,4 @@
-import React, { useState, ReactNode } from "react";
+import React, { useState, ReactNode, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import TopNavigation from "./TopNavigation";
 import MasterUserBanner from "./MasterUserBanner";
@@ -6,6 +6,7 @@ import { useAuth } from "../../../../supabase/auth";
 import { supabase } from "../../../../supabase/supabase";
 import { Tables } from "@/types/supabase";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
+import { useNavigate } from "react-router-dom";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -16,10 +17,36 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [userProfile, setUserProfile] =
     useState<Tables<"user_profiles"> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const navigate = useNavigate();
+
+  // Check if we're in offline mode
+  useEffect(() => {
+    const offlineUser = localStorage.getItem("offlineUser");
+    if (!user && offlineUser) {
+      setIsOfflineMode(true);
+      try {
+        const parsedUser = JSON.parse(offlineUser);
+        setUserProfile({
+          id: "offline-user",
+          full_name: parsedUser.name || "Offline User",
+          role: parsedUser.role || "doctor",
+          created_at: new Date().toISOString(),
+        } as any);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error parsing offline user:", error);
+        navigate("/login");
+      }
+    } else if (!user && !offlineUser) {
+      // If no user and no offline mode, redirect to login
+      navigate("/login");
+    }
+  }, [user, navigate]);
 
   React.useEffect(() => {
     async function fetchUserProfile() {
-      if (!user) {
+      if (!user || isOfflineMode) {
         setLoading(false);
         return;
       }
@@ -110,7 +137,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
 
     fetchUserProfile();
-  }, [user]);
+  }, [user, isOfflineMode]);
 
   if (loading) {
     return <LoadingScreen text="Loading dashboard..." />;
@@ -120,11 +147,22 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
-      <TopNavigation userProfile={userProfile} />
+      <TopNavigation userProfile={userProfile} isOfflineMode={isOfflineMode} />
       <div className="flex h-[calc(100vh-64px)] mt-16">
         <Sidebar userRole={userProfile?.role || "doctor"} />
         <main className="flex-1 overflow-auto">
           <div className="container mx-auto px-6 pt-4 pb-2">
+            {isOfflineMode && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
+                <p className="text-sm text-yellow-800 font-medium">
+                  ⚠️ Offline Mode Active
+                </p>
+                <p className="text-xs text-yellow-700">
+                  You are currently using the application in offline mode with
+                  limited functionality.
+                </p>
+              </div>
+            )}
             {isMasterUser && (
               <MasterUserBanner
                 userName={
