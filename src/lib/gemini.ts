@@ -7,15 +7,6 @@ import {
 // Initialize the Google Generative AI with the API key
 // Use a fallback key if the API key is not available
 const API_KEY = "AIzaSyBBXVIaqFnVmbT7cjp_f1Ow0sWcHGt9teI";
-let genAI: GoogleGenerativeAI;
-
-try {
-  genAI = new GoogleGenerativeAI(API_KEY);
-} catch (error) {
-  console.error("Error initializing Gemini AI:", error);
-  // Create a dummy instance that will be replaced with proper error handling
-  genAI = {} as GoogleGenerativeAI;
-}
 
 // Configure safety settings
 const safetySettings = [
@@ -37,24 +28,34 @@ const safetySettings = [
   },
 ];
 
-// Get the Gemini Pro model
-export let geminiModel: any;
+// Create a function to get or initialize the Gemini model
+// This prevents issues with multiple initializations during development
+let geminiModelInstance: any = null;
 
-try {
-  geminiModel = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    safetySettings,
-  });
-} catch (error) {
-  console.error("Error getting Gemini model:", error);
-  // Create a dummy model that will return error messages
-  geminiModel = {
-    generateContent: async () => ({
-      response: {
-        text: () => "AI service currently unavailable. Please try again later.",
-      },
-    }),
-  };
+function getGeminiModel() {
+  if (geminiModelInstance) {
+    return geminiModelInstance;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(API_KEY);
+    geminiModelInstance = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      safetySettings,
+    });
+    return geminiModelInstance;
+  } catch (error) {
+    console.error("Error initializing Gemini AI:", error);
+    // Create a dummy model that will return error messages
+    return {
+      generateContent: async () => ({
+        response: {
+          text: () =>
+            "AI service currently unavailable. Please try again later.",
+        },
+      }),
+    };
+  }
 }
 
 // Function to generate text using Gemini
@@ -63,7 +64,8 @@ export async function generateMedicalResponse(
   specialty?: string,
 ): Promise<string> {
   try {
-    if (!geminiModel || !geminiModel.generateContent) {
+    const model = getGeminiModel();
+    if (!model || !model.generateContent) {
       return "AI service is not available at the moment. Please try again later.";
     }
 
@@ -73,7 +75,7 @@ export async function generateMedicalResponse(
       fullPrompt = `As a medical AI specializing in ${specialty}, ${prompt}`;
     }
 
-    const result = await geminiModel.generateContent(fullPrompt);
+    const result = await model.generateContent(fullPrompt);
     const response = result.response;
     return response.text();
   } catch (error) {
@@ -97,7 +99,8 @@ export async function generateCollaborativeAnalysis(
   consensusLevel: number;
 }> {
   try {
-    if (!geminiModel || !geminiModel.generateContent) {
+    const model = getGeminiModel();
+    if (!model || !model.generateContent) {
       return {
         finalRecommendation:
           "AI service is not available at the moment. Please try again later.",
@@ -115,10 +118,22 @@ export async function generateCollaborativeAnalysis(
     Based on the following query: "${query}", provide a collaborative analysis from the perspective of these specialties: ${specialties.join(
       ", ",
     )}. 
-    For each specialty, provide an opinion, reasoning, and confidence level (0-100). 
-    Then, provide a final recommendation that synthesizes all perspectives and a consensus level (0-100).`;
+    
+    I want you to simulate a conversation between these specialists, where they discuss the case, ask each other questions, and build on each other's insights. Make it feel like a real collaborative discussion between experts.
+    
+    For each specialty, provide:
+    - An initial opinion based on their expertise
+    - Questions they might ask other specialists
+    - Responses to questions from other specialists
+    - A refined opinion after hearing from colleagues
+    - Reasoning for their final assessment
+    - Confidence level (0-100)
+    
+    Then, provide a final recommendation that synthesizes all perspectives and a consensus level (0-100).
+    
+    Format your response so it's easy to parse programmatically with clear sections for each specialist's contributions.`;
 
-    const result = await geminiModel.generateContent(systemPrompt);
+    const result = await model.generateContent(systemPrompt);
     const responseText = result.response.text();
 
     // Parse the response to extract structured data
@@ -126,11 +141,11 @@ export async function generateCollaborativeAnalysis(
     const agentResponses = specialties.map((specialty) => {
       // Extract opinion and reasoning for each specialty
       const opinionMatch = new RegExp(
-        `${specialty}.*?Opinion:(.*?)(?=Reasoning:|$)`,
+        `${specialty}.*?Opinion:(.*?)(?=Reasoning:|Questions:|$)`,
         "is",
       ).exec(responseText);
       const reasoningMatch = new RegExp(
-        `${specialty}.*?Reasoning:(.*?)(?=Confidence:|$)`,
+        `${specialty}.*?Reasoning:(.*?)(?=Confidence:|Final Opinion:|$)`,
         "is",
       ).exec(responseText);
       const confidenceMatch = new RegExp(
@@ -138,11 +153,19 @@ export async function generateCollaborativeAnalysis(
         "is",
       ).exec(responseText);
 
+      // Try to extract refined opinion if available
+      const refinedOpinionMatch = new RegExp(
+        `${specialty}.*?Refined Opinion:|Final Opinion:(.*?)(?=Reasoning:|$)`,
+        "is",
+      ).exec(responseText);
+
       return {
         specialty,
-        opinion: opinionMatch
-          ? opinionMatch[1].trim()
-          : `Analysis from ${specialty} perspective`,
+        opinion: refinedOpinionMatch
+          ? refinedOpinionMatch[1].trim()
+          : opinionMatch
+            ? opinionMatch[1].trim()
+            : `Analysis from ${specialty} perspective`,
         reasoning: reasoningMatch
           ? reasoningMatch[1].trim()
           : `Reasoning based on ${specialty} expertise`,
@@ -154,7 +177,9 @@ export async function generateCollaborativeAnalysis(
 
     // Extract final recommendation
     const finalRecMatch =
-      /Final Recommendation:(.*?)(?=Consensus Level:|$)/is.exec(responseText);
+      /Final Recommendation:|Consensus Recommendation:(.*?)(?=Consensus Level:|$)/is.exec(
+        responseText,
+      );
     const consensusMatch = /Consensus Level:\s*(\d+)/i.exec(responseText);
 
     return {
