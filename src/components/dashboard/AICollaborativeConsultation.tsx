@@ -136,10 +136,56 @@ const AICollaborativeConsultation = ({
         getAgentName(agentId),
       );
 
-      // Generate collaborative analysis
+      // Calculate specialty relevance weights based on the query
+      const specialtyWeights = specialties.map((specialty) => {
+        // Simple keyword matching for demonstration
+        const queryLower = query.toLowerCase();
+        const specialtyLower = specialty.toLowerCase();
+
+        // Default weight
+        let weight = 1.0;
+
+        // Increase weight if query contains terms related to the specialty
+        if (
+          specialtyLower.includes("cardio") ||
+          specialtyLower.includes("heart")
+        ) {
+          if (
+            queryLower.includes("heart") ||
+            queryLower.includes("chest pain") ||
+            queryLower.includes("blood pressure") ||
+            queryLower.includes("pulse")
+          ) {
+            weight = 1.5;
+          }
+        } else if (specialtyLower.includes("neuro")) {
+          if (
+            queryLower.includes("headache") ||
+            queryLower.includes("brain") ||
+            queryLower.includes("nerve") ||
+            queryLower.includes("seizure")
+          ) {
+            weight = 1.5;
+          }
+        } else if (specialtyLower.includes("radio")) {
+          if (
+            queryLower.includes("image") ||
+            queryLower.includes("scan") ||
+            queryLower.includes("x-ray") ||
+            queryLower.includes("mri")
+          ) {
+            weight = 1.5;
+          }
+        }
+
+        return weight;
+      });
+
+      // Generate collaborative analysis with weighted inputs
       const analysisResult = await generateCollaborativeAnalysis(
         `Patient ${patientName} (ID: ${patientId}) - ${query}`,
         specialties,
+        specialtyWeights,
       );
 
       // Create messages for each agent contribution
@@ -162,12 +208,12 @@ const AICollaborativeConsultation = ({
         confidence: response.confidence,
       }));
 
-      // Add final recommendation from central AI
+      // Add final recommendation from central AI with reasoning trace if available
       const finalMessage = {
         id: (Date.now() + Math.random() * 1000).toString(),
         sender: "ai",
         aiType: "central",
-        content: `Based on our collaborative analysis, here is the final recommendation:\n\n${analysisResult.finalRecommendation}`,
+        content: `Based on our collaborative analysis, here is the final recommendation:\n\n${analysisResult.finalRecommendation}${analysisResult.reasoningTrace ? "\n\nReasoning Process:\n" + analysisResult.reasoningTrace : ""}`,
         timestamp: new Date(Date.now() + 20000),
         isFinal: true,
       };

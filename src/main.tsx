@@ -4,13 +4,23 @@ import App from "./App.tsx";
 import "./index.css";
 import { BrowserRouter } from "react-router-dom";
 
-import { TempoDevtools } from "tempo-devtools";
-TempoDevtools.init();
+// Only initialize TempoDevtools in development environment
+if (import.meta.env.DEV) {
+  import("tempo-devtools")
+    .then(({ TempoDevtools }) => {
+      TempoDevtools.init();
+    })
+    .catch((err) => {
+      console.warn("Failed to load TempoDevtools:", err);
+    });
+}
 
-const basename = import.meta.env.BASE_URL;
+const basename = "/";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <BrowserRouter basename={basename}>
-    <App />
-  </BrowserRouter>,
+  <React.StrictMode>
+    <BrowserRouter basename={basename}>
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>,
 );

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Database, Cpu, RefreshCw } from "lucide-react";
+import { Shield, Database, Cpu, RefreshCw, Globe } from "lucide-react";
 
 interface MasterUserModalProps {
   trigger?: React.ReactNode;
@@ -67,6 +67,12 @@ export default function MasterUserModal({
                 className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none"
               >
                 AI Models
+              </TabsTrigger>
+              <TabsTrigger
+                value="external"
+                className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none"
+              >
+                External AI
               </TabsTrigger>
               <TabsTrigger
                 value="data"
@@ -212,6 +218,57 @@ export default function MasterUserModal({
               <Button variant="outline">Check for Updates</Button>
               <Button className="bg-blue-600 hover:bg-blue-700">
                 Apply All Updates
+              </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="external" className="p-6 space-y-6">
+            <div className="space-y-4">
+              <div className="flex items-start gap-4">
+                <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Globe className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="space-y-4 flex-1">
+                  <div>
+                    <h3 className="text-lg font-semibold">
+                      External AI Integration
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      Connect to external AI providers
+                    </p>
+                  </div>
+
+                  <div className="p-4 border rounded-lg bg-blue-50 border-blue-100">
+                    <p className="text-sm text-blue-700">
+                      You can manage external AI integrations in the dedicated
+                      management panel. This allows you to connect to
+                      third-party AI providers like OpenAI, Anthropic, or custom
+                      APIs to enhance the system's capabilities.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="external-ai-key">
+                      OpenAI API Key (Example)
+                    </Label>
+                    <Input
+                      id="external-ai-key"
+                      type="password"
+                      placeholder="sk-..."
+                    />
+                    <p className="text-xs text-gray-500">
+                      API keys are stored securely and only accessible to master
+                      users
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline">Cancel</Button>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                Open Management Panel
               </Button>
             </div>
           </TabsContent>

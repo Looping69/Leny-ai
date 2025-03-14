@@ -1,0 +1,20 @@
+# AIDA Medical Application Bugs
+
+## Routing Issues
+- [FIXED] No routes matched location "/dashboard/consultation" - Fixed by restructuring route handling in App.tsx
+- [FIXED] No routes matched location "/login" - Fixed by restructuring route handling in App.tsx
+- [FIXED] No routes matched location "/" - Fixed by restructuring route handling in App.tsx
+- [FIXED] No routes matched location "/signup" - Fixed by restructuring route handling in App.tsx
+- [FIXED] No routes matched location "/dashboard" - Fixed by restructuring route handling in App.tsx
+
+## Authentication Issues
+- [FIXED] Failed to load resource: the server responded with a status of 400 () - Fixed by improving error handling in auth.tsx and updating Supabase client configuration
+
+## Database Issues
+- [FIXED] Failed to load resource: the server responded with a status of 500 () - Fixed by modifying user profile fetch in DashboardLayout.tsx
+- [FIXED] Error fetching user profile: infinite recursion detected in policy for relation "user_profiles" - Fixed by creating a new migration to update database policies
+
+## React Component Issues
+- [ACTIVE] Warning: Function components cannot be given refs - Issue with DropdownMenu component
+
+

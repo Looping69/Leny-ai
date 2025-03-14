@@ -1,6 +1,8 @@
-import { Suspense } from "react";
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes, useRoutes } from "react-router-dom";
-import routes from "tempo-routes";
+// Import tempo-routes conditionally to avoid build issues
+import tempoRoutes from "tempo-routes";
+const routes = import.meta.env.DEV ? tempoRoutes : [];
 import LoginForm from "./components/auth/LoginForm";
 import SignUpForm from "./components/auth/SignUpForm";
 import Dashboard from "./components/pages/dashboard";
@@ -12,6 +14,11 @@ import Home from "./components/pages/home";
 import { AuthProvider, useAuth } from "../supabase/auth";
 import { Toaster } from "./components/ui/toaster";
 import { LoadingScreen } from "./components/ui/loading-spinner";
+
+// Lazy load the AppointmentFollowUpPage component
+const AppointmentFollowUpPage = lazy(
+  () => import("./components/pages/AppointmentFollowUpPage"),
+);
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -28,14 +35,18 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
-  // Tempo routes need to be included before the main routes
-  const tempoRoutes =
-    import.meta.env.VITE_TEMPO === "true" ? useRoutes(routes) : null;
-
+  // For Tempo routes, we need to ensure they're properly handled
+  // but we'll also define all routes directly to avoid routing issues
   return (
     <>
-      {tempoRoutes}
-      {/* Tempo routes are handled separately above */}
+      {/* Include Tempo routes if in Tempo environment */}
+      {import.meta.env.VITE_TEMPO === "true" && (
+        <Routes>
+          <Route path="/tempobook/*" element={null} />
+        </Routes>
+      )}
+
+      {/* Main application routes */}
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<LoginForm />} />
@@ -93,6 +104,18 @@ function AppRoutes() {
           element={
             <PrivateRoute>
               <Dashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dashboard/appointments/follow-up"
+          element={
+            <PrivateRoute>
+              <Suspense
+                fallback={<LoadingScreen text="Loading follow-up page..." />}
+              >
+                <AppointmentFollowUpPage />
+              </Suspense>
             </PrivateRoute>
           }
         />

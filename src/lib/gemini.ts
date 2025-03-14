@@ -88,6 +88,7 @@ export async function generateMedicalResponse(
 export async function generateCollaborativeAnalysis(
   query: string,
   specialties: string[],
+  specialtyWeights: number[] = [],
 ): Promise<{
   finalRecommendation: string;
   agentResponses: Array<{
@@ -95,8 +96,11 @@ export async function generateCollaborativeAnalysis(
     opinion: string;
     reasoning: string;
     confidence: number;
+    evidenceLinks?: string[];
+    decisionPath?: string;
   }>;
   consensusLevel: number;
+  reasoningTrace?: string;
 }> {
   try {
     const model = getGeminiModel();
@@ -114,8 +118,14 @@ export async function generateCollaborativeAnalysis(
       };
     }
 
+    // Apply specialty weights if provided, otherwise use equal weights
+    const weightedSpecialties = specialties.map((specialty, index) => {
+      const weight = specialtyWeights[index] || 1.0;
+      return `${specialty} (relevance weight: ${weight})`;
+    });
+
     const systemPrompt = `You are a team of medical AI specialists analyzing a patient case. 
-    Based on the following query: "${query}", provide a collaborative analysis from the perspective of these specialties: ${specialties.join(
+    Based on the following query: "${query}", provide a collaborative analysis from the perspective of these specialties with their relevance weights: ${weightedSpecialties.join(
       ", ",
     )}. 
     
@@ -126,10 +136,12 @@ export async function generateCollaborativeAnalysis(
     - Questions they might ask other specialists
     - Responses to questions from other specialists
     - A refined opinion after hearing from colleagues
-    - Reasoning for their final assessment
+    - Detailed reasoning for their final assessment with specific medical evidence
     - Confidence level (0-100)
+    - 2-3 evidence links or references that support their conclusion
+    - A brief decision path showing how they arrived at their conclusion
     
-    Then, provide a final recommendation that synthesizes all perspectives and a consensus level (0-100).
+    Then, provide a final recommendation that synthesizes all perspectives, giving more weight to specialists with higher relevance to this case. Include a consensus level (0-100) and a reasoning trace that shows how the final recommendation was derived from individual specialist inputs.
     
     Format your response so it's easy to parse programmatically with clear sections for each specialist's contributions.`;
 
@@ -182,12 +194,46 @@ export async function generateCollaborativeAnalysis(
       );
     const consensusMatch = /Consensus Level:\s*(\d+)/i.exec(responseText);
 
+    // Extract reasoning trace if available
+    const reasoningTraceMatch =
+      /Reasoning Trace:|Decision Process:(.*?)(?=Consensus Level:|$)/is.exec(
+        responseText,
+      );
+
+    // Extract evidence links for each agent
+    agentResponses.forEach((agent) => {
+      const evidenceMatch = new RegExp(
+        `${agent.specialty}.*?Evidence Links:|References:(.*?)(?=Decision Path:|$)`,
+        "is",
+      ).exec(responseText);
+
+      const decisionPathMatch = new RegExp(
+        `${agent.specialty}.*?Decision Path:|Reasoning Path:(.*?)(?=Evidence Links:|References:|$)`,
+        "is",
+      ).exec(responseText);
+
+      if (evidenceMatch && evidenceMatch[1]) {
+        const evidenceText = evidenceMatch[1].trim();
+        agent.evidenceLinks = evidenceText
+          .split(/\n|\r|\r\n/)
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0 && line.match(/^[\d\-\*\•]|^http/));
+      }
+
+      if (decisionPathMatch && decisionPathMatch[1]) {
+        agent.decisionPath = decisionPathMatch[1].trim();
+      }
+    });
+
     return {
       finalRecommendation: finalRecMatch
         ? finalRecMatch[1].trim()
         : "Based on the collaborative analysis, we recommend...",
       agentResponses,
       consensusLevel: consensusMatch ? parseInt(consensusMatch[1]) : 85,
+      reasoningTrace: reasoningTraceMatch
+        ? reasoningTraceMatch[1].trim()
+        : undefined,
     };
   } catch (error) {
     console.error("Error generating collaborative analysis:", error);

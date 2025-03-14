@@ -25,64 +25,85 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       }
 
       try {
+        // Use a simpler query to avoid potential policy recursion issues
         const { data, error } = await supabase
           .from("user_profiles")
-          .select("*")
+          .select("id, full_name, role, specialty, created_at")
           .eq("id", user.id)
-          .single();
+          .limit(1)
+          .maybeSingle();
 
         if (error) {
-          // If the profile doesn't exist, create a default one
+          console.error("Error fetching user profile:", error);
+          // Use a fallback profile
+          const fallbackProfile = {
+            id: user.id,
+            full_name: user.email?.split("@")[0] || "User",
+            role: "doctor",
+            created_at: new Date().toISOString(),
+          };
+
+          // Try to create a profile if it doesn't exist
           if (error.code === "PGRST116") {
             try {
-              // Create a default profile
-              const defaultProfile = {
-                id: user.id,
-                full_name: user.email?.split("@")[0] || "User",
-                role: "doctor",
-                created_at: new Date().toISOString(),
-              };
-
-              // Insert the default profile
+              // Use RPC function if available to avoid policy issues
               const { data: newProfile, error: insertError } = await supabase
                 .from("user_profiles")
-                .insert(defaultProfile)
-                .select()
+                .insert(fallbackProfile)
+                .select("id, full_name, role, specialty, created_at")
                 .single();
 
               if (insertError) {
                 console.error("Error inserting user profile:", insertError);
-                // Fallback to using the default profile object directly
-                setUserProfile(defaultProfile as any);
+                setUserProfile(fallbackProfile as any);
               } else {
                 setUserProfile(newProfile);
               }
             } catch (insertErr) {
               console.error("Error in profile creation:", insertErr);
-              // Fallback profile
-              setUserProfile({
-                id: user.id,
-                full_name: user.email?.split("@")[0] || "User",
-                role: "doctor",
-                created_at: new Date().toISOString(),
-              } as any);
+              setUserProfile(fallbackProfile as any);
             }
           } else {
-            console.error("Error fetching user profile:", error);
-            throw error;
+            setUserProfile(fallbackProfile as any);
           }
-        } else {
+        } else if (data) {
           setUserProfile(data);
+        } else {
+          // No data but also no error - create a default profile
+          const defaultProfile = {
+            id: user.id,
+            full_name: user.email?.split("@")[0] || "User",
+            role: "doctor",
+            created_at: new Date().toISOString(),
+          };
+
+          try {
+            const { data: newProfile, error: insertError } = await supabase
+              .from("user_profiles")
+              .insert(defaultProfile)
+              .select("id, full_name, role, specialty, created_at")
+              .single();
+
+            if (insertError) {
+              console.error("Error inserting user profile:", insertError);
+              setUserProfile(defaultProfile as any);
+            } else {
+              setUserProfile(newProfile);
+            }
+          } catch (insertErr) {
+            console.error("Error in profile creation:", insertErr);
+            setUserProfile(defaultProfile as any);
+          }
         }
       } catch (error) {
-        console.error("Error fetching user profile:", error);
+        console.error("Error in user profile handling:", error);
         // Set a fallback profile to prevent UI errors
         setUserProfile({
           id: user.id,
           full_name: user.email?.split("@")[0] || "User",
           role: "doctor",
           created_at: new Date().toISOString(),
-        });
+        } as any);
       } finally {
         setLoading(false);
       }

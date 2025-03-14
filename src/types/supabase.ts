@@ -134,6 +134,44 @@ export type Database = {
           },
         ]
       }
+      consultation_messages: {
+        Row: {
+          ai_type: string | null
+          consultation_id: string
+          content: string
+          created_at: string | null
+          id: string
+          sender: string
+          updated_at: string | null
+        }
+        Insert: {
+          ai_type?: string | null
+          consultation_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          sender: string
+          updated_at?: string | null
+        }
+        Update: {
+          ai_type?: string | null
+          consultation_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          sender?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultation_messages_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "consultations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consultations: {
         Row: {
           consensus_level: number | null
@@ -173,6 +211,48 @@ export type Database = {
           symptoms?: Json | null
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      external_ai_integrations: {
+        Row: {
+          api_endpoint: string | null
+          api_key: string
+          configuration: Json | null
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          provider: string
+          specialty: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          api_endpoint?: string | null
+          api_key: string
+          configuration?: Json | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          provider: string
+          specialty?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          api_endpoint?: string | null
+          api_key?: string
+          configuration?: Json | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          provider?: string
+          specialty?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -318,6 +398,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_external_ai_integration: {
+        Args: {
+          integration_id: string
+        }
+        Returns: Json
+      }
       log_master_user_action: {
         Args: {
           action_type: string
